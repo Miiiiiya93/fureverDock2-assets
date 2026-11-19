@@ -4050,7 +4050,7 @@ for(const a of albums.slice(-1)){
  const mix=(p,q,t)=>[p[0]+(q[0]-p[0])*t,p[1]+(q[1]-p[1])*t];const fraction=Math.min(1,(photoW/photoH)/2),left=(1-fraction)/2,right=1-left;
  const crop=[mix(a.q[0],a.q[1],left),mix(a.q[0],a.q[1],right),mix(a.q[2],a.q[3],left),mix(a.q[2],a.q[3],right)];
  const geo=new T.PlaneGeometry(photoW,photoH);geo.setAttribute('uv',new T.Float32BufferAttribute(crop.flatMap(p=>[p[0]/866,1-p[1]/852]),2));
- const pic=new T.Mesh(geo,new T.MeshBasicMaterial({map:photoTexture,toneMapped:false,side:T.DoubleSide}));pic.position.set(0,cy,.012);panel.add(pic);
+ const pic=new T.Mesh(geo,new T.MeshBasicMaterial({map:photoTexture,toneMapped:false,side:T.DoubleSide}));pic.name='Album photo';pic.position.set(0,cy,.012);panel.add(pic);
 
 }
 }
@@ -4306,33 +4306,54 @@ canvas.onpointerup=canvas.onpointercancel=e=>{pointers.delete(e.pointerId);lastP
 }
 
 // Drag the photo album across horizontal surfaces without rotating the scene.
+let albumCollection;
 {
- const album=room.children.find(o=>o.name==='Health photo album');
+ let album=room.children.find(o=>o.name==='Health photo album');
  if(album){
   const storageKey='health-album-position-v1';let albumEditing=false;
   try{const p=JSON.parse(localStorage.getItem(storageKey)||'null');if(Array.isArray(p)&&p.length===3&&p.every(Number.isFinite)&&p.every(v=>Math.abs(v)<10))album.position.fromArray(p);}catch(e){}
   
-  const panel=album.children[0],angleKey='health-album-angles-v1';
+  let panel=album.children[0];const angleKey='health-album-angles-v1';
   try{const angles=JSON.parse(localStorage.getItem(angleKey)||'null');if(angles&&Number.isFinite(angles.yaw)&&Number.isFinite(angles.tilt)){album.rotation.y=angles.yaw;panel.rotation.x=Math.max(-Math.PI/6,Math.min(Math.PI/6,angles.tilt));}}catch(e){}
   const editor=document.createElement('div');editor.setAttribute('aria-label','相册编辑');editor.style.cssText='position:absolute;right:16px;top:16px;z-index:30;font:13px system-ui;color:#4e321f;';
   editor.innerHTML=`<button type="button" data-album-edit style="border:1px solid #d4c4ae;background:#fffaf2;color:#4e321f;border-radius:9px;padding:9px 14px;cursor:pointer">编辑相册</button><div data-album-controls hidden style="margin-top:8px;width:230px;padding:14px;background:#fffaf2;border:1px solid #d4c4ae;border-radius:12px;box-shadow:0 4px 16px #0002"><div style="margin-bottom:12px">拖动相框可移动位置</div><label style="display:block;margin-bottom:12px">朝向 <output data-yaw-output></output><input aria-label="相册朝向" data-album-yaw type="range" min="-180" max="180" step="1" style="display:block;width:100%;margin-top:6px"></label><label style="display:block;margin-bottom:12px">倾斜 <output data-tilt-output></output><input aria-label="相册倾斜" data-album-tilt type="range" min="-30" max="30" step="1" style="display:block;width:100%;margin-top:6px"></label><button type="button" data-album-done style="width:100%;padding:8px;background:#65432a;color:white;border:0;border-radius:7px;cursor:pointer">完成编辑</button></div>`;
   stage.style.position='relative';stage.appendChild(editor);
   const editButton=editor.querySelector('[data-album-edit]'),controls=editor.querySelector('[data-album-controls]'),yawInput=editor.querySelector('[data-album-yaw]'),tiltInput=editor.querySelector('[data-album-tilt]');
-  function saveAngles(){try{localStorage.setItem(angleKey,JSON.stringify({yaw:album.rotation.y,tilt:panel.rotation.x}));}catch(e){}}
-  function syncAngles(){yawInput.value=Math.round(((album.rotation.y*180/Math.PI+180)%360+360)%360-180);tiltInput.value=Math.round(panel.rotation.x*180/Math.PI);editor.querySelector('[data-yaw-output]').value=yawInput.value+'°';editor.querySelector('[data-tilt-output]').value=tiltInput.value+'°';}
+
+  const albumTemplate=album.clone(true);const albums=[album];album.userData.albumId='original';album.userData.photoData=null;
+  const albumStateKey='health-albums-v2';let photoRequest=0;
+  const actions=document.createElement('div');actions.style.cssText='display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px';actions.innerHTML='<select aria-label="选择相框" style="width:100%"></select><button type="button" data-copy-album>复制相框</button><button type="button" data-photo-album>替换照片</button><button type="button" data-remove-album>删除相框</button><input type="file" accept="image/png,image/jpeg,image/webp" hidden><span data-album-message></span>';controls.prepend(actions);
+  const albumSelect=actions.querySelector('select'),albumMessage=actions.querySelector('[data-album-message]');
+  function albumSnapshot(){return {version:2,items:albums.map(g=>({id:g.userData.albumId,position:g.position.toArray(),yaw:g.rotation.y,tilt:g.children[0].rotation.x,photo:g.userData.photoData||null}))};}
+  function persistAlbums(){try{localStorage.setItem(albumStateKey,JSON.stringify(albumSnapshot()));}catch(e){albumMessage.textContent='本地存储不足，请导出备份';}}
+  function refreshAlbums(){albumSelect.replaceChildren();albums.forEach((g,i)=>{const option=document.createElement('option');option.value=g.userData.albumId;option.textContent='相框 '+(i+1);albumSelect.appendChild(option);});if(album)albumSelect.value=album.userData.albumId;actions.querySelector('[data-copy-album]').textContent=albums.length?'复制相框':'添加相框';actions.querySelector('[data-photo-album]').disabled=!album;actions.querySelector('[data-remove-album]').disabled=!album;yawInput.disabled=tiltInput.disabled=!album;}
+  function selectAlbum(g){album=g||null;panel=album?.children[0]||null;refreshAlbums();syncAngles();}
+  function cloneAlbum(source){const g=source.clone(true);g.traverse(o=>{if(o.isMesh){o.material=o.material.clone();if(o.name==='Album photo'){o.geometry=o.geometry.clone();o.userData.ownedPhoto=false;}if(o.material.isMeshMatcapMaterial){let exposure;o.onBeforeRender=()=>{exposure=renderer.toneMappingExposure;renderer.toneMappingExposure=1.6;};o.onAfterRender=()=>{renderer.toneMappingExposure=exposure;};}}});return g;}
+  function releaseAlbum(g){const pic=g.getObjectByName('Album photo');if(pic?.userData.ownedPhoto)pic.material.map?.dispose();g.traverse(o=>{if(o.isMesh&&g!==albums[0]){if(o.name==='Album photo')o.geometry.dispose();}});room.remove(g);}
+  function replaceAlbumPhoto(g,data){if(!g||!albums.includes(g))return Promise.resolve();const pic=g.getObjectByName('Album photo');if(!pic)return Promise.reject(Error('相片面未找到'));const request=(g.userData.photoRequest||0)+1;g.userData.photoRequest=request;return new Promise((resolve,reject)=>new T.TextureLoader().load(data,texture=>{if(!albums.includes(g)||g.userData.photoRequest!==request){texture.dispose();resolve();return;}texture.encoding=T.sRGBEncoding;texture.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());if(pic.userData.ownedPhoto)pic.material.map?.dispose();if(!pic.userData.photoGeometryOwned){pic.geometry=pic.geometry.clone();pic.userData.photoGeometryOwned=true;}pic.geometry.setAttribute('uv',new T.Float32BufferAttribute([0,1,1,1,0,0,1,0],2));pic.material=pic.material.clone();pic.material.map=texture;pic.material.needsUpdate=true;pic.userData.ownedPhoto=true;g.userData.photoData=data;renderer.render(scene,camera);resolve();},undefined,reject));}
+  function duplicateAlbum(){if(albums.length>=8){albumMessage.textContent='最多可放置 8 个相框';return;}const source=album||albumTemplate,g=cloneAlbum(source);g.userData.albumId=crypto.randomUUID();g.userData.photoData=source.userData.photoData||null;g.userData.photoRequest=0;g.position.x+=.2;g.position.z+=.12;room.add(g);albums.push(g);if(g.userData.photoData)replaceAlbumPhoto(g,g.userData.photoData);selectAlbum(g);persistAlbums();renderer.render(scene,camera);}
+  function removeAlbum(){if(!album)return;const g=album,i=albums.indexOf(g);releaseAlbum(g);albums.splice(i,1);selectAlbum(albums[Math.max(0,i-1)]);persistAlbums();renderer.render(scene,camera);}
+  function applyAlbums(state){if(!state)return;if(state.version!==2){if(album&&Array.isArray(state.position)){album.position.fromArray(state.position);album.rotation.y=state.yaw||0;panel.rotation.x=state.tilt||0;persistAlbums();}return;}if(!Array.isArray(state.items)||state.items.length>8)return;const finite3=x=>Array.isArray(x)&&x.length===3&&x.every(Number.isFinite);if(!state.items.every(d=>typeof d.id==='string'&&finite3(d.position)&&Number.isFinite(d.yaw)&&Number.isFinite(d.tilt)&&(!d.photo||(typeof d.photo==='string'&&d.photo.length<=95000&&/^data:image\/(jpeg|png|webp);base64,/.test(d.photo)))))return;const previous=album?.userData.albumId;albums.slice().forEach(releaseAlbum);albums.length=0;for(const d of state.items){const g=cloneAlbum(albumTemplate);g.userData.albumId=d.id;g.userData.photoData=d.photo||null;g.position.fromArray(d.position);g.rotation.y=d.yaw;g.children[0].rotation.x=d.tilt;room.add(g);albums.push(g);if(d.photo)replaceAlbumPhoto(g,d.photo);}selectAlbum(albums.find(g=>g.userData.albumId===previous)||albums[0]);persistAlbums();renderer.render(scene,camera);}
+  albumCollection={snapshot:albumSnapshot,apply:applyAlbums,persist:persistAlbums,objects:()=>albums,duplicate:duplicateAlbum,remove:removeAlbum,replace:replaceAlbumPhoto};
+  albumSelect.onchange=()=>selectAlbum(albums.find(g=>g.userData.albumId===albumSelect.value));actions.querySelector('[data-copy-album]').onclick=duplicateAlbum;actions.querySelector('[data-remove-album]').onclick=removeAlbum;
+  const photoFile=actions.querySelector('input[type=file]');actions.querySelector('[data-photo-album]').onclick=()=>photoFile.click();photoFile.onchange=async()=>{const file=photoFile.files[0],target=album,request=++photoRequest;if(!file||!target)return;let bitmap;try{albumMessage.textContent='正在处理照片…';bitmap=await createImageBitmap(file);const cv=document.createElement('canvas');cv.width=600;cv.height=338;const ctx=cv.getContext('2d'),scale=Math.max(cv.width/bitmap.width,cv.height/bitmap.height);ctx.fillStyle='#fff';ctx.fillRect(0,0,cv.width,cv.height);ctx.drawImage(bitmap,(cv.width-bitmap.width*scale)/2,(cv.height-bitmap.height*scale)/2,bitmap.width*scale,bitmap.height*scale);let data=cv.toDataURL('image/jpeg',.8);for(let q=.65;data.length>90000&&q>=.2;q-=.15)data=cv.toDataURL('image/jpeg',q);if(data.length>90000)throw Error('图片过于复杂，请换一张较小照片');if(request!==photoRequest||!albums.includes(target))return;await replaceAlbumPhoto(target,data);persistAlbums();albumMessage.textContent='照片已替换';}catch(e){albumMessage.textContent=e.message||'照片读取失败';}finally{bitmap?.close();photoFile.value='';}};
+  try{const saved=JSON.parse(localStorage.getItem(albumStateKey)||'null');if(saved)applyAlbums(saved);}catch(e){}refreshAlbums();
+
+  function saveAngles(){if(!album)return;albumCollection.persist();try{localStorage.setItem(angleKey,JSON.stringify({yaw:album.rotation.y,tilt:panel.rotation.x}));}catch(e){}}
+  function syncAngles(){if(!album)return;yawInput.value=Math.round(((album.rotation.y*180/Math.PI+180)%360+360)%360-180);tiltInput.value=Math.round(panel.rotation.x*180/Math.PI);editor.querySelector('[data-yaw-output]').value=yawInput.value+'°';editor.querySelector('[data-tilt-output]').value=tiltInput.value+'°';}
   function setAlbumEditing(value){albumEditing=value;controls.hidden=!value;editButton.textContent=value?'相册编辑中':'编辑相册';editButton.setAttribute('aria-expanded',String(value));canvas.style.cursor=value?'grab':'';if(value){pauseMotion();syncAngles();}else saveAngles();}
   editButton.onclick=()=>setAlbumEditing(!albumEditing);editor.querySelector('[data-album-done]').onclick=()=>setAlbumEditing(false);
-  yawInput.oninput=()=>{album.rotation.y=Number(yawInput.value)*Math.PI/180;syncAngles();saveAngles();renderer.render(scene,camera);};
-  tiltInput.oninput=()=>{panel.rotation.x=Number(tiltInput.value)*Math.PI/180;syncAngles();saveAngles();renderer.render(scene,camera);};
+  yawInput.oninput=()=>{if(!album)return;album.rotation.y=Number(yawInput.value)*Math.PI/180;syncAngles();saveAngles();renderer.render(scene,camera);};
+  tiltInput.oninput=()=>{if(!album)return;panel.rotation.x=Number(tiltInput.value)*Math.PI/180;syncAngles();saveAngles();renderer.render(scene,camera);};
   for(const type of ['pointerdown','pointermove','pointerup','wheel','keydown'])editor.addEventListener(type,e=>e.stopPropagation());
   syncAngles();
   const ray=new T.Raycaster(),mouse=new T.Vector2(),plane=new T.Plane(),hit=new T.Vector3(),offset=new T.Vector3();let dragId=null;
   function pointRay(e){const r=canvas.getBoundingClientRect();mouse.set((e.clientX-r.left)/r.width*2-1,1-(e.clientY-r.top)/r.height*2);room.updateMatrixWorld(true);ray.setFromCamera(mouse,camera);}
-  function onAlbum(e){if(!albumEditing)return false;pointRay(e);return ray.intersectObject(album,true).length>0;}
+  function onAlbum(e){if(!albumEditing)return false;pointRay(e);return ray.intersectObjects(albumCollection.objects(),true).length>0;}
   function consume(e){e.preventDefault();e.stopImmediatePropagation();}
   canvas.addEventListener('pointerdown',e=>{
    if(e.button!==0||dragId!==null||!onAlbum(e))return;
-   consume(e);pauseMotion();pointers.clear();lastPinch=0;dragId=e.pointerId;
+   const picked=ray.intersectObjects(albumCollection.objects(),true)[0];let chosen=picked.object;while(chosen.parent!==room)chosen=chosen.parent;selectAlbum(chosen);consume(e);pauseMotion();pointers.clear();lastPinch=0;dragId=e.pointerId;
    const origin=album.getWorldPosition(new T.Vector3()),normal=new T.Vector3(0,1,0).transformDirection(room.matrixWorld);
    plane.setFromNormalAndCoplanarPoint(normal,origin);ray.ray.intersectPlane(plane,hit);offset.copy(origin).sub(hit);
    canvas.setPointerCapture(e.pointerId);canvas.style.cursor='grabbing';
@@ -4348,7 +4369,7 @@ canvas.onpointerup=canvas.onpointercancel=e=>{pointers.delete(e.pointerId);lastP
    if(!support)return;
    const local=room.worldToLocal(support.point.clone());album.position.set(p.x,local.y,p.z);room.updateMatrixWorld(true);renderer.render(scene,camera);
   },true);
-  function finish(e){if(e.pointerId!==dragId)return;consume(e);dragId=null;canvas.style.cursor='grab';if(canvas.hasPointerCapture(e.pointerId))canvas.releasePointerCapture(e.pointerId);try{localStorage.setItem(storageKey,JSON.stringify(album.position.toArray()));}catch(e){}renderer.render(scene,camera);}
+  function finish(e){if(e.pointerId!==dragId)return;consume(e);dragId=null;canvas.style.cursor='grab';if(canvas.hasPointerCapture(e.pointerId))canvas.releasePointerCapture(e.pointerId);albumCollection.persist();try{localStorage.setItem(storageKey,JSON.stringify(album.position.toArray()));}catch(e){}renderer.render(scene,camera);}
   canvas.addEventListener('pointerup',finish,true);canvas.addEventListener('pointercancel',finish,true);
   canvas.addEventListener('lostpointercapture',e=>{if(e.pointerId===dragId)finish(e);},true);
  }
@@ -4389,7 +4410,7 @@ try{setBackground(JSON.parse(localStorage.getItem(backgroundKey)||'{"type":"defa
  let code='',channel=null,active=false,busy=false,held=false,timer=null,poll=null,baseline={},revisions={},sdk=null,pendingAt=0;
  const fields=['shots','lighting','labels','album','finish'];
  const album=room.getObjectByName('Health photo album');
- const snapshot=()=>({shots:JSON.parse(JSON.stringify(shots)),lighting:{...lightState,background:backgroundState},labels:Object.fromEntries(['Life','Health','Relationships','Growth'].map(name=>{const g=room.getObjectByName(name);return [name,g?{position:g.position.toArray(),scaleXYZ:g.scale.toArray(),rotation:[g.rotation.x,g.rotation.y,g.rotation.z]}:null];})),album:album?{position:album.position.toArray(),yaw:album.rotation.y,tilt:album.children[0].rotation.x}:null,finish:finishMode});
+ const snapshot=()=>({shots:JSON.parse(JSON.stringify(shots)),lighting:{...lightState,background:backgroundState},labels:Object.fromEntries(['Life','Health','Relationships','Growth'].map(name=>{const g=room.getObjectByName(name);return [name,g?{position:g.position.toArray(),scaleXYZ:g.scale.toArray(),rotation:[g.rotation.x,g.rotation.y,g.rotation.z]}:null];})),album:albumCollection?albumCollection.snapshot():null,finish:finishMode});
  const vec=v=>Array.isArray(v)&&v.length===3&&v.every(Number.isFinite);
  const prefix=shotKey.startsWith('shared-review-')?'shared-review-':'';
  const store=(k,v)=>localStorage.setItem(prefix+k,JSON.stringify(v));
@@ -4397,13 +4418,13 @@ try{setBackground(JSON.parse(localStorage.getItem(backgroundKey)||'{"type":"defa
   if(field==='shots'&&Array.isArray(v)){pauseMotion();shots=v;selected=-1;persistShots();renderShots();}
   if(field==='lighting'&&v){lightState=normalizeLight(v);syncLighting();applyLighting(true);if(v.background&&JSON.stringify(v.background)!==JSON.stringify(backgroundState))setBackground(v.background);}
   if(field==='finish')setFinish(v,true);
-  if(field==='album'&&album&&v&&vec(v.position)&&Number.isFinite(v.yaw)&&Number.isFinite(v.tilt)){album.position.fromArray(v.position);album.rotation.y=v.yaw;album.children[0].rotation.x=v.tilt;store('health-album-position-v1',v.position);store('health-album-angles-v1',{yaw:v.yaw,tilt:v.tilt});}
+  if(field==='album'&&v&&albumCollection)albumCollection.apply(v);
   if(field==='labels'&&v){const saved={};for(const [name,d]of Object.entries(v)){if(!['Life','Health','Relationships','Growth'].includes(name)||!d)continue;const g=room.getObjectByName(name);if(g&&vec(d.position)&&vec(d.rotation)&&vec(d.scaleXYZ)&&d.scaleXYZ.every(x=>x>0&&x<=10)){g.position.fromArray(d.position);g.rotation.set(...d.rotation);g.scale.fromArray(d.scaleXYZ);saved[name]={...d,scale:d.scaleXYZ[0]};}}store('label-transforms-v1',saved);}
   room.updateMatrixWorld(true);renderer.render(scene,camera);
  }
  async function rpc(name,args){const response=await fetch(url+'/rest/v1/rpc/'+name,{method:'POST',headers:{apikey:apiKey,'Content-Type':'application/json'},body:JSON.stringify(args)});if(!response.ok)throw Error(await response.text());return response.json();}
  function remember(){const s=snapshot();fields.forEach(k=>baseline[k]=JSON.stringify(s[k]));}
- async function pull(force=false){if(!active||busy||held)return;busy=true;try{const remote=await rpc('model_sync_read',{access_code:code}),local=snapshot();for(const k of fields){const r=remote[k];if(!r)continue;if(force||JSON.stringify(local[k])===baseline[k]){apply(k,r.value);revisions[k]=r.revision;baseline[k]=JSON.stringify(snapshot()[k]);}}title.textContent='协作同步 · 已连接';}catch(e){title.textContent='协作同步 · 连接异常，稍后重试';}finally{busy=false;}}
+ async function pull(force=false){if(!active||busy||held)return;busy=true;try{const remote=await rpc('model_sync_read',{access_code:code}),local=snapshot();for(const k of fields){const r=remote[k];if(!r)continue;if(force||JSON.stringify(local[k])===baseline[k]){if(JSON.stringify(snapshot()[k])!==JSON.stringify(r.value))apply(k,r.value);revisions[k]=r.revision;baseline[k]=JSON.stringify(snapshot()[k]);}}title.textContent='协作同步 · 已连接';}catch(e){title.textContent='协作同步 · 连接异常，稍后重试';}finally{busy=false;}}
  async function flush(){if(!active||busy||held)return;const s=snapshot(),changed=fields.filter(k=>JSON.stringify(s[k])!==baseline[k]);if(!changed.length){pendingAt=0;return;}if(!pendingAt){pendingAt=Date.now();return;}if(Date.now()-pendingAt<500)return;busy=true;let conflict=false;try{for(const k of changed){const sent=JSON.stringify(s[k]),revision=await rpc('model_sync_write',{access_code:code,field_name:k,field_value:s[k],expected_revision:revisions[k]||0});if(revision===-1){localStorage.setItem('model-sync-conflict-backup',JSON.stringify(s));conflict=true;break;}revisions[k]=revision;baseline[k]=sent;}if(channel)await channel.send({type:'broadcast',event:'changed',payload:{}});title.textContent='协作同步 · 已保存';}catch(e){title.textContent='协作同步 · 保存失败，保留本地调整';}finally{busy=false;pendingAt=0;}if(conflict){await pull(true);title.textContent='协作同步 · 同项冲突，已载入同事版本（本地已备份）';}}
  function disconnect(){active=false;clearInterval(timer);clearInterval(poll);if(channel&&sdk)sdk.removeChannel(channel);channel=null;button.textContent='连接';title.textContent='协作同步 · 未连接';input.disabled=false;}
  async function connect(){if(active){disconnect();return;}code=input.value.trim();if(!/^[a-f0-9]{64}$/.test(code)){title.textContent='请输入 SQL 返回的协作码';return;}button.disabled=true;try{const remote=await rpc('model_sync_read',{access_code:code});revisions={};for(const k of fields)if(remote[k]){apply(k,remote[k].value);revisions[k]=remote[k].revision;}remember();active=true;
