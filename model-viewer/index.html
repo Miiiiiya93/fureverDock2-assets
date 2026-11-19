@@ -3950,7 +3950,7 @@ for(let y=0;y<1024;y++)for(let x=0;x<512;x++){
 woodContext.putImageData(woodPixels,0,0);
 const woodTexture=new T.CanvasTexture(woodCanvas);woodTexture.encoding=T.sRGBEncoding;woodTexture.wrapS=woodTexture.wrapT=T.RepeatWrapping;woodTexture.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());
 const woodRelief=woodTexture.clone();woodRelief.encoding=T.LinearEncoding;woodRelief.needsUpdate=true;
-const woodFinish=new T.MeshStandardMaterial({name:'暖棕直纹木 · 缎面',color:'#dca777',map:woodTexture,bumpMap:woodRelief,bumpScale:.0012,roughness:.39,metalness:0,side:T.DoubleSide});
+const woodFinish=new T.MeshStandardMaterial({name:'白色木质 · 细直纹',color:'#faf8f3',map:woodTexture,bumpMap:woodRelief,bumpScale:.0007,roughness:.45,metalness:0,side:T.DoubleSide});
 woodFinish.color.convertSRGBToLinear();
 
 // Local solid name plaque — La Belle Aurore, cream outline and brown lettering.
@@ -4042,7 +4042,7 @@ for(const a of albums.slice(-1)){
  outline.closePath();
  const points=outline.getPoints(24).map(p=>[p.x,p.y]);
  const aperture=new T.Path();aperture.moveTo(-photoW/2,cy-photoH/2);aperture.lineTo(-photoW/2,cy+photoH/2);aperture.lineTo(photoW/2,cy+photoH/2);aperture.lineTo(photoW/2,cy-photoH/2);aperture.closePath();outline.holes.push(aperture);
- const frameWood=woodFinish.clone();frameWood.name='木质相框';frameWood.roughness=.46;frameWood.bumpScale=.0004;
+ const frameWood=woodFinish.clone();frameWood.name='木质相框';frameWood.color.set('#dca777').convertSRGBToLinear();frameWood.roughness=.46;frameWood.bumpScale=.0004;
  const rim=new T.Mesh(new T.ExtrudeGeometry(outline,{depth:.028,bevelEnabled:true,bevelSegments:3,steps:1,bevelSize:.003,bevelThickness:.003}),frameWood);rim.geometry.computeBoundingBox();const bb= rim.geometry.boundingBox,pa=rim.geometry.attributes.position,uv=new Float32Array(pa.count*2),extent=Math.max(bb.max.x-bb.min.x,bb.max.y-bb.min.y);for(let k=0;k<pa.count;k++){uv[k*2]=(pa.getX(k)-bb.min.x)/extent;uv[k*2+1]=(pa.getY(k)-bb.min.y)/extent;}rim.geometry.setAttribute('uv',new T.BufferAttribute(uv,2));rim.position.z=-.014;rim.castShadow=true;rim.receiveShadow=true;panel.add(rim);
  // Fine warm-gold border follows the entire scalloped outline.
  const borderPath=new T.CurvePath();for(let i=0;i<points.length;i++){const p=points[i],q=points[(i+1)%points.length];borderPath.add(new T.LineCurve3(new T.Vector3(p[0],p[1],.017),new T.Vector3(q[0],q[1],.017)));}
