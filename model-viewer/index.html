@@ -4239,7 +4239,7 @@ root.querySelector('[data-shot-play-one]').onclick=()=>playSelected(true);
 root.querySelector('[data-shot-restart]').onclick=()=>{resetSequence();motionButton.onclick();};
 document.addEventListener('visibilitychange',()=>{if(document.hidden)pauseMotion();});renderShots();
 
-root.querySelector('[data-view]').onclick=()=>{pauseMotion();zoom=1;panX=panY=0;update();save();};
+
 for(const button of viewButtons)button.onclick=()=>{pauseMotion();const view=viewPresets[button.dataset.camera];yaw=view.yaw;pitch=view.pitch;zoom=1;panX=panY=0;update();save();};
 root.querySelector('[data-export-first-png]').onclick=()=>{
  const button=root.querySelector('[data-export-first-png]');
