@@ -4246,7 +4246,7 @@ root.querySelector('[data-export-first-png]').onclick=()=>{
  pauseMotion();const previous=cameraSnapshot(),oldAspect=camera.aspect,oldGround=ground.visible,oldBackground=scene.background,oldColor=renderer.getClearColor(new T.Color()).clone(),oldAlpha=renderer.getClearAlpha();
  button.disabled=true;
  try{
-  ground.visible=false;scene.background=null;renderer.setClearColor(0x000000,0);
+  if(backgroundState.type==='default'){ground.visible=false;scene.background=null;renderer.setClearColor(0x000000,0);}
   const width=2400,height=Math.round(width*stage.clientHeight/stage.clientWidth);
   renderer.setPixelRatio(1);renderer.setSize(width,height,false);camera.aspect=width/height;update();
   const a=document.createElement('a');a.href=canvas.toDataURL('image/png');a.download='current-camera.png';a.click();
@@ -4357,6 +4357,29 @@ canvas.onpointerup=canvas.onpointercancel=e=>{pointers.delete(e.pointerId);lastP
 let wheelTimer;canvas.addEventListener('wheel',e=>{e.preventDefault();pauseMotion();zoom=Math.max(1/6,Math.min(2.8,zoom*Math.exp(e.deltaY*.001)));update();clearTimeout(wheelTimer);wheelTimer=setTimeout(save,300);},{passive:false});
 function resize(){const w=stage.clientWidth,h=stage.clientHeight;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();camera.clearViewOffset();update();}new ResizeObserver(resize).observe(stage);
 restore(window.openai?.widgetState);window.addEventListener('openai:set_globals',e=>{if(e.detail?.globals?.widgetState)restore(e.detail.globals.widgetState);});resize();root.querySelector('.room-loading').hidden=true;
+// Custom background: color or a bounded embedded photo, shared with lighting.
+const backgroundKey='furever-background-v1';let backgroundState={type:'default'},backgroundTexture=null,backgroundGeneration=0;
+const backgroundUI=document.createElement('div');backgroundUI.style.cssText='display:flex;align-items:center;gap:8px;flex-wrap:wrap';
+backgroundUI.innerHTML='<span>背景</span><input type="color" aria-label="背景颜色" value="#e8e4df"><button type="button" data-bg-upload>上传背景图片</button><input type="file" accept="image/png,image/jpeg,image/webp" hidden><button type="button" data-bg-reset>恢复默认背景</button><span data-bg-status></span>';
+root.querySelector('.viz-controls').appendChild(backgroundUI);
+function fitBackground(){if(!backgroundTexture)return;const im=backgroundTexture.image,view=stage.clientWidth/Math.max(1,stage.clientHeight),ratio=im.width/im.height;backgroundTexture.repeat.set(view<ratio?view/ratio:1,view>ratio?ratio/view:1);backgroundTexture.offset.set((1-backgroundTexture.repeat.x)/2,(1-backgroundTexture.repeat.y)/2);backgroundTexture.updateMatrix();}
+function setBackground(value,persist=true){
+ if(!value||!['default','color','image'].includes(value.type))return;
+ if(value.type==='color'&&!/^#[0-9a-f]{6}$/i.test(value.color||''))return;
+ if(value.type==='image'&&(!/^data:image\/(jpeg|png|webp);base64,/.test(value.image||'')||value.image.length>800000))return;
+ const generation=++backgroundGeneration;backgroundState={...value};if(backgroundTexture){backgroundTexture.dispose();backgroundTexture=null;}scene.background=null;ground.visible=value.type==='default';
+ if(value.type==='color'){scene.background=new T.Color(value.color);backgroundUI.querySelector('input[type=color]').value=value.color;}
+ if(value.type==='image'){new T.TextureLoader().load(value.image,texture=>{if(generation!==backgroundGeneration){texture.dispose();return;}texture.encoding=T.sRGBEncoding;backgroundTexture=texture;fitBackground();scene.background=texture;renderer.render(scene,camera);},undefined,()=>{backgroundUI.querySelector('[data-bg-status]').textContent='图片加载失败';});}
+ if(persist)try{localStorage.setItem(backgroundKey,JSON.stringify(backgroundState));}catch(e){backgroundUI.querySelector('[data-bg-status]').textContent='本地空间不足，背景暂未保存';}
+ renderer.render(scene,camera);
+}
+backgroundUI.querySelector('input[type=color]').oninput=e=>setBackground({type:'color',color:e.target.value});
+backgroundUI.querySelector('[data-bg-reset]').onclick=()=>{backgroundUI.querySelector('[data-bg-status]').textContent='';setBackground({type:'default'});};
+const backgroundFile=backgroundUI.querySelector('input[type=file]');backgroundUI.querySelector('[data-bg-upload]').onclick=()=>backgroundFile.click();
+backgroundFile.onchange=async()=>{const file=backgroundFile.files[0];if(!file)return;const status=backgroundUI.querySelector('[data-bg-status]');status.textContent='正在处理图片…';let bitmap;try{bitmap=await createImageBitmap(file);const cv=document.createElement('canvas'),scale=Math.min(1,1280/Math.max(bitmap.width,bitmap.height));cv.width=Math.max(1,Math.round(bitmap.width*scale));cv.height=Math.max(1,Math.round(bitmap.height*scale));const ctx=cv.getContext('2d');ctx.fillStyle='#ffffff';ctx.fillRect(0,0,cv.width,cv.height);ctx.drawImage(bitmap,0,0,cv.width,cv.height);let image=cv.toDataURL('image/jpeg',.8);for(let quality=.65;image.length>750000&&quality>=.2;quality-=.15)image=cv.toDataURL('image/jpeg',quality);if(image.length>750000)throw Error('图片过于复杂，请换一张较小图片');setBackground({type:'image',image});status.textContent='背景已替换';}catch(e){status.textContent=e.message||'图片无法读取';}finally{if(bitmap)bitmap.close();backgroundFile.value='';}};
+new ResizeObserver(()=>{fitBackground();renderer.render(scene,camera);}).observe(stage);
+try{setBackground(JSON.parse(localStorage.getItem(backgroundKey)||'{"type":"default"}'),false);}catch(e){}
+
 // Shared parameters only; each viewer keeps their own live camera.
 (()=>{
  const url='https://rbuxladzugqsubkurrsu.supabase.co',apiKey='sb_publishable_zK1FVXmRjRE3Ergn78tz1Q_DV3wGs_F';
@@ -4366,13 +4389,13 @@ restore(window.openai?.widgetState);window.addEventListener('openai:set_globals'
  let code='',channel=null,active=false,busy=false,held=false,timer=null,poll=null,baseline={},revisions={},sdk=null,pendingAt=0;
  const fields=['shots','lighting','labels','album','finish'];
  const album=room.getObjectByName('Health photo album');
- const snapshot=()=>({shots:JSON.parse(JSON.stringify(shots)),lighting:{...lightState},labels:Object.fromEntries(['Life','Health','Relationships','Growth'].map(name=>{const g=room.getObjectByName(name);return [name,g?{position:g.position.toArray(),scaleXYZ:g.scale.toArray(),rotation:[g.rotation.x,g.rotation.y,g.rotation.z]}:null];})),album:album?{position:album.position.toArray(),yaw:album.rotation.y,tilt:album.children[0].rotation.x}:null,finish:finishMode});
+ const snapshot=()=>({shots:JSON.parse(JSON.stringify(shots)),lighting:{...lightState,background:backgroundState},labels:Object.fromEntries(['Life','Health','Relationships','Growth'].map(name=>{const g=room.getObjectByName(name);return [name,g?{position:g.position.toArray(),scaleXYZ:g.scale.toArray(),rotation:[g.rotation.x,g.rotation.y,g.rotation.z]}:null];})),album:album?{position:album.position.toArray(),yaw:album.rotation.y,tilt:album.children[0].rotation.x}:null,finish:finishMode});
  const vec=v=>Array.isArray(v)&&v.length===3&&v.every(Number.isFinite);
  const prefix=shotKey.startsWith('shared-review-')?'shared-review-':'';
  const store=(k,v)=>localStorage.setItem(prefix+k,JSON.stringify(v));
  function apply(field,v){
   if(field==='shots'&&Array.isArray(v)){pauseMotion();shots=v;selected=-1;persistShots();renderShots();}
-  if(field==='lighting'&&v){lightState=normalizeLight(v);syncLighting();applyLighting(true);}
+  if(field==='lighting'&&v){lightState=normalizeLight(v);syncLighting();applyLighting(true);if(v.background&&JSON.stringify(v.background)!==JSON.stringify(backgroundState))setBackground(v.background);}
   if(field==='finish')setFinish(v,true);
   if(field==='album'&&album&&v&&vec(v.position)&&Number.isFinite(v.yaw)&&Number.isFinite(v.tilt)){album.position.fromArray(v.position);album.rotation.y=v.yaw;album.children[0].rotation.x=v.tilt;store('health-album-position-v1',v.position);store('health-album-angles-v1',{yaw:v.yaw,tilt:v.tilt});}
   if(field==='labels'&&v){const saved={};for(const [name,d]of Object.entries(v)){if(!['Life','Health','Relationships','Growth'].includes(name)||!d)continue;const g=room.getObjectByName(name);if(g&&vec(d.position)&&vec(d.rotation)&&vec(d.scaleXYZ)&&d.scaleXYZ.every(x=>x>0&&x<=10)){g.position.fromArray(d.position);g.rotation.set(...d.rotation);g.scale.fromArray(d.scaleXYZ);saved[name]={...d,scale:d.scaleXYZ[0]};}}store('label-transforms-v1',saved);}
