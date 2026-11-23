@@ -1,0 +1,21 @@
+Furever Journal Tutorial 分享版
+
+1. 解压整个压缩包，保留文件夹内所有文件。
+2. 用 Chrome 或 Edge 打开“打开 Journal Tutorial.html”。
+3. 开场结束出现 Connector；点击 Continue 继续镜头，双击 Luna 进入 Ask。
+4. Ask 自动展开，可以自由回答三轮问题。
+5. 最后出现“Gotcha. 🐾”，Ask 消失时开始播放模型变形与合页动画。
+
+本包已包含模型、照片、字体、Connector 卡片和箭头、Ask 对话及动画。
+无需安装 Furever App，不依赖原电脑或 127.0.0.1:8743 服务。
+前后模型均为无木纹的灰白效果；Ask 已下移 10px；最后镜头已同步。
+
+请勿单独打开“实时协作版.html”或“journal-background.html”，它们是内部素材。
+如浏览器限制本地文件，可使用文件夹内的启动脚本（需 Python 3），
+或将整个文件夹部署到静态网站后打开 index.html。
+
+2026-11-23：已同步“模型分享版-含当前镜头.html”的 13 个镜头，包括时长和自定义曲线。Connector 在第 11 镜后出现。
+
+2026-11-23：第 10 镜加入 Figma 光球；10.13 秒上移，10.39 秒放大柔光，然后接 Connector。
+
+光球已换成单颗玻璃球，复用 FusionOrb 的玻璃高光与融合玻璃旋转气体；无中间图标。
