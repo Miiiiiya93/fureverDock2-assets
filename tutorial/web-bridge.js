@@ -1,1 +1,1 @@
-window.webkit={messageHandlers:{furever:{postMessage:function(message){window.parent.postMessage({type:'journal-native-action',action:message.action},location.protocol === 'file:' ? '*' : location.origin);}}}};
+window.webkit={messageHandlers:{furever:{postMessage:function(message){window.parent.postMessage({...message,type:'journal-native-action'},location.protocol === 'file:' ? '*' : location.origin);}}}};

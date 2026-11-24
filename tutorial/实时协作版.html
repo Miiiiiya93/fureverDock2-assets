@@ -4525,7 +4525,13 @@ seatedCat.scale.copy(catSilhouette.scale);
 seatedCat.visible = false;
 stageCat.add(seatedCat);
 
+const catIntroCopy=document.createElement('p');
+catIntroCopy.id='journalCatIntroCopy';catIntroCopy.hidden=true;
+catIntroCopy.textContent="And if there's more to share,  Momo's just a double-click away.";
+const catIntroStyle=document.createElement('style');catIntroStyle.textContent="@font-face{font-family:JournalIntro;src:url(fv-today/fonts/google-sans-flex-latin.woff2);font-weight:100 900}#journalCatIntroCopy{position:fixed;z-index:12;margin:0;pointer-events:none;color:white;font-family:JournalIntro,system-ui;font-weight:900;line-height:1.333;white-space:pre-wrap;paint-order:stroke fill;text-shadow:none}#journalCatIntroCopy[hidden]{display:none!important}";document.head.appendChild(catIntroStyle);document.body.appendChild(catIntroCopy);
+function positionCatIntroCopy(){const u=Math.min(innerWidth/1280,innerHeight/832);Object.assign(catIntroCopy.style,{left:((innerWidth-1280*u)/2+168*u)+'px',top:((innerHeight-832*u)/2+222*u)+'px',width:(317*u)+'px',fontSize:(24*u)+'px',webkitTextStroke:(10*u)+'px #5a4e45'});}positionCatIntroCopy();addEventListener('resize',positionCatIntroCopy);
 function showSeatedCat(visible) {
+  catIntroCopy.hidden=!visible;
   catHalo.visible = catSilhouette.visible = !visible;
   seatedCat.visible = visible;
 }
@@ -4538,6 +4544,7 @@ canvas.addEventListener('dblclick', event => {
     1 - (event.clientY - rect.top) / rect.height * 2
   ), camera);
   if (catPicker.intersectObject(seatedCat).length) {
+    catIntroCopy.hidden=true;
     stageCat.visible = false;
     update();
     window.parent.postMessage({ type: 'journal-ask-open' }, location.protocol === 'file:' ? '*' : location.origin);
