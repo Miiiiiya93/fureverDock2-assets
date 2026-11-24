@@ -4397,11 +4397,16 @@ let albumCollection;
    paper.userData.title=text;paper.userData.renderedTitle=text;
   }
   function refreshPaperTitles(){
-   const growth=albums.filter(g=>g.position.x>0).sort((a,b)=>b.position.y-a.position.y);
-   const titles=['Graduation','Wedding','Exam\nPrep','Career\nBreakthrough'];
-   growth.forEach((g,i)=>{const p=g.getObjectByName('Blank white paper card');if(p&&i<4&&typeof p.userData.title!=='string')p.userData.title=titles[i];});
-   albums.forEach(g=>{const p=g.getObjectByName('Blank white paper card');if(p&&typeof p.userData.title==='string')paintPaperTitle(p,p.userData.title);});
+   const growthTitles={
+    'f6b04e72-8ece-4886-80b1-a70417f0be86':'Graduation',
+    'ccd7fe00-6f72-4e97-bfc3-be647611611f':'Wedding',
+    '1853963d-a391-449f-b67c-e587cad535fe':'Exam\nPrep',
+    '9e304972-2e27-4bb8-8ea0-6002fcb24e6f':'Career\nBreakthrough'
+   };
+   const previousTitles=Object.values(growthTitles);
+   albums.forEach(g=>{const p=g.getObjectByName('Blank white paper card');if(!p)return;const title=growthTitles[g.userData.albumId];if(title!==undefined)paintPaperTitle(p,title);else if(previousTitles.includes(p.userData.title))paintPaperTitle(p,'');});
   }
+
   function albumSnapshot(){const assets={},refs=new Map();return {version:2,items:albums.map(g=>{const data=g.userData.photoData||null;let photo=null;if(data){if(!refs.has(data)){const id='photo'+refs.size;refs.set(data,id);assets[id]=data;}photo=refs.get(data);}return {id:g.userData.albumId,position:g.position.toArray(),yaw:g.rotation.y,rotation:[g.rotation.x,g.rotation.y,g.rotation.z],scale:g.scale.toArray(),tilt:g.children[0].rotation.x,paper:(()=>{const p=g.getObjectByName('Blank white paper card');return p?{sideLayoutVersion:1,text:p.userData.title,position:p.position.toArray(),rotation:[p.rotation.x,p.rotation.y,p.rotation.z],scale:p.scale.toArray()}:null;})(),photo};}),assets};}
 
   function persistAlbums(){try{localStorage.setItem(albumStateKey,JSON.stringify(albumSnapshot()));}catch(e){albumMessage.textContent='本地存储不足，请导出备份';}}
