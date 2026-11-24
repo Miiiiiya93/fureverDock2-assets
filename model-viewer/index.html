@@ -4051,6 +4051,12 @@ for(const a of albums.slice(-1)){
  const crop=[mix(a.q[0],a.q[1],left),mix(a.q[0],a.q[1],right),mix(a.q[2],a.q[3],left),mix(a.q[2],a.q[3],right)];
  const geo=new T.PlaneGeometry(photoW,photoH);geo.setAttribute('uv',new T.Float32BufferAttribute(crop.flatMap(p=>[p[0]/866,1-p[1]/852]),2));
  const pic=new T.Mesh(geo,new T.MeshBasicMaterial({map:photoTexture,toneMapped:false,side:T.DoubleSide}));pic.name='Album photo';pic.position.set(0,cy,.012);panel.add(pic);
+ // Plain blank paper card beside the photo; belongs to the editable album group.
+ const paperMaterial=new T.MeshStandardMaterial({name:'纯白纸',color:0xffffff,roughness:1,metalness:0,side:T.DoubleSide});
+ const paperCard=new T.Mesh(new T.BoxGeometry(.42,.28,.002),paperMaterial);
+ paperCard.name='Blank white paper card';paperCard.position.set(frameW/2+.24,.152,.013);
+ paperCard.castShadow=true;paperCard.receiveShadow=true;panel.add(paperCard);
+
 
 }
 }
