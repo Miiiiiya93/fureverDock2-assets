@@ -4403,6 +4403,12 @@ let albumCollection;
     '1853963d-a391-449f-b67c-e587cad535fe':'Exam\nPrep',
     '9e304972-2e27-4bb8-8ea0-6002fcb24e6f':'Career\nBreakthrough'
    };
+   // Health albums verified on the left staircase; preserve Growth's fixed assignments.
+   growthTitles['original']='Hiking';
+   growthTitles['543ff6a0-d659-466f-9c15-70e774d65306']='Gym\nWorkout';
+   growthTitles['9afa6401-2f23-4c12-b10c-c6b4ee4723e0']='Healthy\nBreakfast';
+   const healthTop=albums.filter(g=>g.position.x < -2 && g.position.y > 1.14).sort((a,b)=>b.position.y-a.position.y)[0];
+   if(healthTop)growthTitles[healthTop.userData.albumId]='Me Time';
    const previousTitles=Object.values(growthTitles);
    albums.forEach(g=>{const p=g.getObjectByName('Blank white paper card');if(!p)return;const title=growthTitles[g.userData.albumId];if(title!==undefined)paintPaperTitle(p,title);else if(previousTitles.includes(p.userData.title))paintPaperTitle(p,'');});
   }
